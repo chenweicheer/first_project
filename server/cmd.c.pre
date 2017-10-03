@@ -1,0 +1,411 @@
+
+
+/*
+ * cmd.c
+ *
+ *	Created on: 2017-8-28
+ *		Author: Administrator
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <sys/ioctl.h>
+#include <stddef.h>
+#include <signal.h>
+#include "cmd.h"
+#include "socket_tool.h"
+#include "cmd_queue.h"
+
+
+/*
+ * 命令对应处理函数
+ * */
+STU_CMD_AND_FUNC g_cmd_pfunc[AMOUNT_CMD] =
+{
+	{
+		CMD_START_CHECK, start_check
+	},
+	{
+		CMD_SEND_TOPLIGHT, send2_toplight
+	},
+	{
+		CMD_RETURN_TOPLIGHT, toplight_return
+	},
+	{
+		CMD_SYN_TIME, syn_time
+	},
+	{
+		CMD_QRY_PRINTER, query_printer
+	},
+	{
+		CMD_QRY_MEASURE, query_measure
+	},
+	{
+		CMD_QRY_TOPLIGHT, query_toplight
+	},
+	{
+		CMD_CHECK_NUM, check_num
+	},
+	{
+		CMD_OBTN_PRICE_PARA, get_price_para
+	},
+	{
+		CMD_SET_PRICE_PARA, set_price_para
+	},
+	{
+		CMD_RESET_MEASURE, reset_measure
+	},
+	{
+		CMD_START_RECORD, start_record
+	},
+	{
+		CMD_OPRATE_UP, report_data
+	},
+	{
+		CMD_STOP_RECORD, stop_record
+	},
+	{
+		CMD_GET_TOTAL_DATA, get_total_data
+	},
+	{
+		CMD_ONEKEY_POLICE, one_key_alarm
+	},
+	{
+		CMD_HARDWARE_ERR, hardware_error
+	},
+	{
+		CMD_RETN_POLICE_ERR, harw_alarm
+	},
+	{
+		CMD_PRINTER_DATA, print_data
+	},
+	{
+		CMD_PRINTER_UP, report_print
+	},
+	{
+		CMD_GET_K_VALUE, get_k
+	},
+	{
+		CMD_SET_K_VALUE, set_k
+	},
+	{
+		CMD_CHENGE_PASSENGER_STATUS, change_passenger_status
+	},
+	{
+		CMD_SYNCHRONOUS, syndata
+	},
+	{
+		CMD_RENAME_BLUE, rename_bluetooth
+	}
+};
+
+
+
+STU_CMDCLIENT	g_cmd_client;
+
+pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+
+
+
+//命令有效性检查
+int cmd_check(u8 * cmd)
+{
+
+	int 			len = cmd[2] << 8 | cmd[3];
+	u16 			crc = cmd[len - 2] << 8 | cmd[len - 1];
+	u16 			cmd_value = cmd[8] << 8 | cmd[9];
+
+	//消息头验证
+	if (0x5A != cmd[0] || 0xA5 != cmd[1])
+	{
+		printf("header error\n");
+		return HEADERERROR;
+	}
+
+	//消息长度验证
+	else if (len < HEADER_LEN || len > BUFFLEN)
+	{
+		printf("len error\n");
+		return LENERROR;
+	}
+
+	//crc16验证
+	else if (crc != (crc16(cmd, len - 2)))
+	{
+		printf("len %d\n", len);
+		printf("crc %x		calculatecrc %x\n", crc, (crc16(cmd, len - 2)));
+		printf("crc16 check error\n");
+		return CRCERROR;
+	}
+	else if (cmd_value < 1 || cmd_value > AMOUNT_CMD)
+	{
+		printf(" no cmd\n");
+		return NOCMD;
+	}
+
+	printf("data check is cmd\n");
+	return OK;
+}
+
+
+
+
+
+void fault_handle()
+{
+	printf("fault handle\n");
+}
+
+
+void timeout_handle()
+{
+	pthread_mutex_lock(&g_lock);
+	g_cmd_client.time_out_count++;
+	printf("timeout %d\n", g_cmd_client.time_out_count);
+	g_cmd_client.cmd_status = CMD_STATUS_RET_SUCCES;
+
+	//超時次數
+	if (g_cmd_client.time_out_count <= TIMEOUT_MAX_COUNT)
+	{
+		send_cmd(g_cmd_client.current_cmd.cmd_value, g_cmd_client.current_cmd.data, 
+			g_cmd_client.current_cmd.len - HEADER_LEN, 
+			g_cmd_client.current_cmd.source_dest);
+	}
+
+	if (g_cmd_client.time_out_count == 3)
+	{
+		//故障處理
+		alarm(0);
+		fault_handle();
+		g_cmd_client.time_out_count = 0;
+		printf(" fault error\n");
+	}
+	pthread_mutex_unlock(&g_lock);
+}
+
+
+
+
+void cmd_dispatch(void * param)
+{
+	int 			pos = (int)
+
+	param;
+	STU_CMD *		cmd = & (g_cmd_queue.cmd_queue[pos]);
+
+	/*switch (cmd->source_dest)
+	{
+		case APP_TO_SERVER:
+			{
+				int 			i	= 0;
+
+				for (; i < AMOUNT_CMD; i++)
+				{
+					if (g_cmd_pfunc[i].cmd == cmd->cmd_value)
+					{
+						g_cmd_pfunc[i].pfunc((unsigned char *) cmd, 
+							g_cmd_client.sockdf);
+					}
+				}
+				break;
+			}
+
+		case JILIANG_TO_SERVER:
+			{
+				printf("start_check\n");
+				respone_cmd(1, "Start data", strlen("Start data"), SERVER_TO_APP);
+				break;
+			}
+	}*/
+
+	int 			i	= 0;
+
+				for (; i < AMOUNT_CMD; i++)
+				{
+					if (g_cmd_pfunc[i].cmd == cmd->cmd_value)
+					{
+						g_cmd_pfunc[i].pfunc((unsigned char *) cmd, 
+							g_cmd_client.sockdf);
+					}
+				}
+}
+
+
+/*命令分发处理
+ *
+ * 根据命令的
+ * */
+void cmd_proc()
+{
+
+	STU_CMD *		cmd = NULL;
+	int 			pos = -1;
+
+	//循环读取命令
+	while (1)
+	{
+		pos 				= dequeue();
+
+		if (pos >= 0)
+		{
+			cmd 				= & (g_cmd_queue.cmd_queue[pos]);
+
+			//命令是响应
+			if (RESPONE_FLAG == cmd->cmd_flag)
+			{
+				printf("\t\t%d\t\t%d",g_cmd_client.current_cmd.cmd_value,cmd->cmd_value);
+				if (g_cmd_client.current_cmd.cmd_value == cmd->cmd_value)
+				{
+					g_cmd_client.time_out_count = 0;
+					g_cmd_client.cmd_status = CMD_STATUS_RET_SUCCES;
+					printf("server recv respone cmd:%d \n", cmd->cmd_value);
+
+					//发送命令收到停止定时器
+					alarm(0);
+				}
+
+				//启动线程处理
+				pthread_t		id;
+				int 			ret;
+
+				ret 				= pthread_create(&id, NULL, (void *) cmd_dispatch, (void *) pos);
+
+				if (ret != 0)
+				{
+					printf("Create pthread error!n");
+				}
+			}
+
+			//命令不是响应
+			else 
+			{
+				//启动线程处理
+				pthread_t		id;
+				int 			ret;
+
+				ret 				= pthread_create(&id, NULL, (void *) cmd_dispatch, (void *) pos);
+
+				if (ret != 0)
+				{
+					printf("Create pthread error!n");
+				}
+			}
+		}
+	}
+}
+
+
+
+void send_cmd(u16 cmd, char * data, int len, unsigned char flag)
+{
+	//只有等待一条命令发送返回才能发下一条
+	
+	
+
+	if (0 >= cmd || AMOUNT_CMD < cmd || DATALEN < len)
+		return;
+
+	while (CMD_STATUS_RET_SUCCES != g_cmd_client.cmd_status)
+		;
+	
+
+	unsigned char	tmp[BUFFLEN];
+
+	tmp[0]				= 0x5a;
+	tmp[1]				= 0xa5;
+	tmp[2]				= (len + HEADER_LEN) >> 8;
+	tmp[3]				= (len + HEADER_LEN);
+	tmp[4]				= flag;
+	tmp[5]				= CMD_FLAG;
+	tmp[6]				= 0;
+	tmp[7]				= 0;
+	tmp[8]				= cmd >> 8;
+	tmp[9]				= cmd;
+
+	if (len > 0)
+	{
+		memcpy(&tmp[HEADER_LEN - 2], data, len);
+		memcpy(g_cmd_client.current_cmd.data, data, len);
+	}
+
+
+	u16 			crc = crc16(tmp, len + HEADER_LEN - 2);
+
+	tmp[len + HEADER_LEN - 2] = crc >> 8;
+	tmp[len + HEADER_LEN - 1] = crc;
+	pthread_mutex_lock(&g_lock);
+	g_cmd_client.cmd_status = CMD_STATUS_WAIT;
+	printf("send cmd %d\n", cmd);
+	g_cmd_client.current_cmd.cmd_value = cmd;
+	g_cmd_client.current_cmd.len = len + HEADER_LEN;
+	g_cmd_client.current_cmd.source_dest = flag;
+
+	//启动定时器
+	alarm(TIMEOUT);
+
+	//发送命令
+	if (SERVER_TO_APP == flag || APP_TO_SERVER == flag)
+	{
+		socket_send_data(tmp, len + HEADER_LEN, g_cmd_client.sockdf);
+	}
+	else if (SERVER_TO_JILIANG == flag)
+	{
+		send_data_to_jiliang(tmp, len + HEADER_LEN);
+	}
+
+	pthread_mutex_unlock(&g_lock);
+}
+
+
+void respone_cmd(u16 cmd, char * data, int len, unsigned char flag)
+{
+	
+
+	g_cmd_client.current_cmd.cmd_value = 0;
+
+	unsigned char	tmp[BUFFLEN];
+
+	tmp[0]				= 0x5a;
+	tmp[1]				= 0xa5;
+	tmp[2]				= (len + HEADER_LEN) >> 8;
+	tmp[3]				= (len + HEADER_LEN);
+	tmp[4]				= flag;
+	tmp[5]				= RESPONE_FLAG;
+	tmp[6]				= 0;
+	tmp[7]				= 0;
+	tmp[8]				= cmd >> 8;
+	tmp[9]				= cmd;
+
+	if (len > 0)
+	{
+		memcpy(&tmp[HEADER_LEN - 2], data, len);
+	}
+
+	u16 			crc = crc16(tmp, len + HEADER_LEN - 2);
+
+	tmp[len + HEADER_LEN - 2] = crc >> 8;
+	tmp[len + HEADER_LEN - 1] = crc;
+	
+	pthread_mutex_lock(&g_lock);
+	g_cmd_client.current_cmd.cmd_value = 0;
+	g_cmd_client.current_cmd.len = len + HEADER_LEN;
+	g_cmd_client.current_cmd.source_dest = 0;
+	printf("Respone cmd %d\n", cmd);
+
+
+	if (SERVER_TO_APP == flag || APP_TO_SERVER == flag)
+	{
+		socket_send_data(tmp, len + HEADER_LEN, g_cmd_client.sockdf);
+	}
+	else if (SERVER_TO_JILIANG == flag)
+	{
+		send_data_to_jiliang(tmp, len + HEADER_LEN);
+	}
+
+	pthread_mutex_unlock(&g_lock);
+}
+
+
