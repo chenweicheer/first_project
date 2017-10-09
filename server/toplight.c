@@ -7,6 +7,9 @@
 
 #include "toplight.h"
 #include <pthread.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 pthread_mutex_t g_toplight_lock=PTHREAD_MUTEX_INITIALIZER;
 
@@ -164,25 +167,36 @@ int  top_light_start()
 int send_cmd_to_toplight(char *data,int len)
 {
 	
-	unsigned char buf[13];
+	unsigned char buf[1024];
+	memset(buf,0,1024);
 	int l=0;
 	pthread_mutex_lock(&g_toplight_lock);
 	int ret = send_data_to_toplight(data,len);
 	if(ret!=0)
 	{
-		printf("toplight write timeout\n");
+		printf("toplight write error\n");
 		return -1;
 	}
-	l = readn(g_cmd_client.toplight_fd,buf,13);
-	
+	l = readn(g_cmd_client.toplight_fd,buf,6);
+	if(l!=6)
+	{
+		printf("recv toplight error\n");
+	}
+	u16 recv_len = buf[5]<<8 | buf[4];
+	printf("recv_len %d\n",recv_len);
+	l = readn(g_cmd_client.toplight_fd,&buf[6],recv_len);
+	if(l!=recv_len)
+	{
+		printf("recv toplight error\n");
+	}
 	pthread_mutex_unlock(&g_toplight_lock);
 	int i=0;
-	for(;i<l;i++)
+	for(;i<recv_len+6;i++)
 	{
-		printf("%02x",buf[i]);
+		printf("%02x ",buf[i]);
 	}
 	printf("\n");
-	if(13!=l)
+	if(recv_len!=l)
 	{
 		printf("toplight recv error\n");
 		return -1;

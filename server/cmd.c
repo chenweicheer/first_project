@@ -379,7 +379,7 @@ void send_cmd_proc()
 	    else if (SERVER_TO_JILIANG == cmd->source_dest)
 	    {
 	    	printf("send cmd  %d to jiliang \n", cmd->cmd_value);
-	        //send_data_to_jiliang(tmp, cmd->len);
+	        send_data_to_jiliang(tmp, cmd->len);
 	    }
 
 		//dlist_remove(&g_send_cmd_queue,node);

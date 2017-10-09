@@ -221,6 +221,14 @@ void cmd_dispatch(void * param)
 	case CMD_START_CHECK:
 		printf("recv start start check respone :%s\n",cmd->data);
 		break;
+	default: 
+		//printf("%d\n",cmd->len);
+		for(i=0;i<cmd->len-HEADER_LEN;i++)
+		{
+			printf("%02x",cmd->data[i]);
+		}
+		printf("\n");
+		break;
 	}
 }
 

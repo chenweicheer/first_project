@@ -103,10 +103,10 @@ void  init()
 	dlist_init(&g_wait_res_cmd_queue,&g_wait_res_cmd_queue_lock,&g_wait_res_cmd_queue_not_full_cond,&g_wait_res_cmd_queue_not_empty_cond);
 
 	//计量模块初始化
-	//init_jiliang();
+	init_jiliang();
 
 	//顶灯模块初始化
-	//init_toplight();
+	init_toplight();
 
 	/*//打印机模块初始化
 	init_printer();	*/

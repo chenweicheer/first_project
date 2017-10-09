@@ -63,6 +63,7 @@ void jiliang_recv()
 	{	
 		memset(buf,0,1024);
 		len=read(g_cmd_client.jiiang_fd ,&buf[0],1);
+		printf("%02x ",buf[0]);
 		if(len>0)
 		{
 			//读取第一个字节

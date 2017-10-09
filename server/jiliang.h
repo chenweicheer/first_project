@@ -16,8 +16,8 @@
 #define JILIANG_NORMAL			0
 #define JILIANG_NO_CONN			1
 #define JILIANG_FAULT			2
-#define JILIANG_SERIAL 			"/dev/ttyS1"
-#define JILIANG_BAUDRATE 		9600
+#define JILIANG_SERIAL 			"/dev/ttyS2"
+#define JILIANG_BAUDRATE 		115200
 #define JILIANG_DATA_BITS 		8
 #define JILIANG_CHECK 			's'
 #define JILIANG_STOP_BITS 		1

@@ -52,6 +52,12 @@ void send2_toplight(u8 * data, int sockdf)
 		case TOPLIGHT_CARPOOL_1:{printf("carploll_1\n");ret =toplight_set_carpool_1();break;}
 		case TOPLIGHT_SOS:{printf("sos\n");ret =toplight_set_sos();break;}
 	}*/
+	
+	//unsigned char front_screen_sos[]={0xAA,0x55,0xFF,0xFF,0x10,0x00,0x06,0x00,0xC1,0x02,0x18,0x08,0x05,0x00,0x01,0x03,0x00,0x00,0xFF,0xFF,0xFD,0x05};
+	//send_cmd_to_toplight(front_screen_sos, 22);
+
+	send_cmd_to_toplight(cmd->data, cmd->len-HEADER_LEN);
+	
 	unsigned char buf[1];
 	buf[0]=(unsigned char)ret;
 	//发送命令给客户端
@@ -154,13 +160,21 @@ void query_toplight(u8 * data, int sockdf)
 {
 	printf("Call QueryToplight\n");
 	unsigned char buf;
-	if(g_cmd_client.toplight_fd<0)
+	/*if(g_cmd_client.toplight_fd<0)
 	{
 		buf=1;
 	}
 	else
 	{
 		buf=toplight_get_status();
+	}*/
+	if(g_cmd_client.toplight_fd<0)
+	{
+		buf=1;
+	}
+	else
+	{
+		buf=0;
 	}
 	send_cmd(CMD_QRY_TOPLIGHT, &buf, 1, SERVER_TO_APP, RESPONE_FLAG);
 	return ;

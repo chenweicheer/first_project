@@ -90,7 +90,7 @@ void print_menu()
 	printf("\n*******************************************************\n");
 	printf("1.开机检查\n");
 	printf("2.发送数据到顶灯\n");
-	printf("3.校时");
+	printf("3.校时\n");
 	printf("4.打印状态查询\n");
 	printf("5.计量设备状态查询\n");
 	printf("6.顶灯状态查询\n");
@@ -139,7 +139,10 @@ int main(void) {
 		printf("Create pthread error!n");
 	}
 
-	
+	ret = pthread_create(&id4, NULL,(void*)check_timeout_pro,NULL);
+	if (ret != 0) {
+		printf("Create pthread error!n");
+	}
 	
 	
 	print_menu();
@@ -149,10 +152,7 @@ int main(void) {
 
 
 	
-	/*ret = pthread_create(&id4, NULL,(void*)check_timeout_pro,NULL);
-	if (ret != 0) {
-		printf("Create pthread error!n");
-	}*/
+	
 	//send_cmd(1,NULL,0,APP_TO_SERVER,CMD_FLAG);
 	//send_cmd(2,NULL,0,APP_TO_SERVER,CMD_FLAG);
 	for(i=0;i<3;i++)
@@ -223,9 +223,11 @@ int main(void) {
 			{
 			case 1: send_cmd(1,NULL,0,APP_TO_SERVER,CMD_FLAG);break;
 			case 2: 
-				printf("输入发给顶灯的数据：");
-				scanf("%s",tmp);
-				send_cmd(2,tmp,20,APP_TO_SERVER,CMD_FLAG);
+				//printf("输入发给顶灯的数据：");
+				//scanf("%s",tmp);
+				printf("发送数据 ：aa 55 ff ff 10 00 02 00 c1 02 18 08 05 00 00 01 00 00 ff ff f6 05 \n");
+				unsigned char front_screen_sos[]={0xAA,0x55,0xFF,0xFF,0x10,0x00,0x06,0x00,0xC1,0x02,0x18,0x08,0x05,0x00,0x01,0x03,0x00,0x00,0xFF,0xFF,0xFD,0x05};
+				send_cmd(2,front_screen_sos,22,APP_TO_SERVER,CMD_FLAG);
 				break;
 			case 3: 
 				
@@ -289,12 +291,6 @@ int main(void) {
 					send_cmd(23,tmp,6,APP_TO_SERVER,CMD_FLAG);
 					break;
 			case 20: send_cmd(24,NULL,0,APP_TO_SERVER,CMD_FLAG);break;
-			
-			
-			
-			
-			
-			
 			}
 		}
 	}
